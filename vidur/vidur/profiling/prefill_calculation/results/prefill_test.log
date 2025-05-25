@@ -1,0 +1,60 @@
+Results Summary:
+  Total test cases run: 1000
+/research/d1/gds/ytyang/yichengfeng/vidur/sarathi-serve-vidur/vidur/vidur/profiling/prefill_calculation/prefill_estimation_test.py:572: MatplotlibDeprecationWarning: The 'labels' parameter of boxplot() has been renamed 'tick_labels' since Matplotlib 3.9; support for the old name will be dropped in 3.11.
+  ax.boxplot(error_by_batch, labels=batch_sizes)
+
+================================================================================
+COMPREHENSIVE VIDUR PREFILL ESTIMATION ACCURACY ANALYSIS
+================================================================================
+Model: meta-llama/Llama-2-7b-hf
+Total test cases: 1000
+Attention backend: AttentionBackend.FLASHINFER
+Warmup strategy: 5 warmup + 10 measurement runs
+--------------------------------------------------------------------------------
+ERROR STATISTICS (Mixed Batch Only):
+  Mean Error: 17.32%
+  Median Error: 7.27%
+  Std Deviation: 22.19%
+  Min Error: -7.47%
+  Max Error: 119.30%
+  Mean Absolute Error: 17.53%
+  95th Percentile Abs Error: 62.22%
+
+ACCURACY THRESHOLDS:
+  Within 5%: 462/987 (46.8%)
+  Within 10%: 532/987 (53.9%)
+  Within 15%: 583/987 (59.1%)
+  Within 20%: 647/987 (65.6%)
+  Within 25%: 693/987 (70.2%)
+  Within 30%: 752/987 (76.2%)
+  Within 50%: 891/987 (90.3%)
+
+BATCH SIZE ANALYSIS:
+  Batch size 2: 161 cases, mean error: 7.7%, median: 1.3%
+  Batch size 3: 232 cases, mean error: 13.1%, median: 5.1%
+  Batch size 4: 202 cases, mean error: 16.9%, median: 9.8%
+  Batch size 5: 177 cases, mean error: 18.4%, median: 9.3%
+  Batch size 6: 148 cases, mean error: 20.4%, median: 9.0%
+  Batch size 7: 41 cases, mean error: 40.1%, median: 39.1%
+  Batch size 8: 12 cases, mean error: 72.5%, median: 74.4%
+  Batch size 9: 4 cases, mean error: 55.0%, median: 55.3%
+  Batch size 10: 3 cases, mean error: 53.6%, median: 53.6%
+  Batch size 12: 4 cases, mean error: 61.0%, median: 63.3%
+  Batch size 15: 2 cases, mean error: 54.4%, median: 54.4%
+  Batch size 20: 1 cases, mean error: 66.9%, median: 66.9%
+
+OUTPUT FILES:
+  CSV: ./results/comprehensive_estimation_results_2025-05-25_01-19-57.csv
+  Plot: ./results/comprehensive_analysis_2025-05-25_01-19-57.png
+================================================================================
+
+BEST CASE (lowest error):
+  Lengths: [64, 64, 64, 64, 64, 2048]
+  Error: -0.0%
+  Actual: 2.1ms, Estimated: 2.1ms
+
+WORST CASE (highest error):
+  Lengths: [128, 128, 128, 128, 128, 128, 128, 128]
+  Error: 119.3%
+  Actual: 0.2ms, Estimated: 0.4ms
+All experiments completed.
