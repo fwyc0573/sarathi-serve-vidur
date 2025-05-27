@@ -67,103 +67,85 @@ def parse_args():
     return parser.parse_args()
 
 
-def generate_comprehensive_test_cases(max_model_len: int, num_cases: int = 1000, seed: int = 42) -> List[List[int]]:
-    """Generate comprehensive test cases for mixed-length batches with specific requirements."""
+def generate_comprehensive_test_cases(max_model_len: int, num_cases: int = 100, seed: int = 42) -> List[List[int]]:
+    """Generate 100 random test cases with consistent lengths per batch, each req length < 8K."""
     random.seed(seed)
     np.random.seed(seed)
     
     test_cases = []
+    max_req_length = 12286  # 12K limit per request
+    min_req_length = 32    # Minimum request length
     
-    # Part 1: 500 combinations with consistent lengths < 4K
-    print("Generating 500 combinations with consistent lengths < 4K...")
+    # Define possible batch sizes
+    possible_batch_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 20, 24, 32]
     
-    # Define length ranges for < 4K cases
-    small_lengths = list(range(32, 4096, 16))  # From 32 to 4095 with step 16
-    batch_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 20, 24, 32]
+    print(f"Generating {num_cases} test cases...")
+    print(f"Request length range: {min_req_length} - {max_req_length}")
+    print(f"Possible batch sizes: {possible_batch_sizes}")
     
-    small_cases = []
-    for _ in range(500):
-        # Randomly select batch size and length
-        batch_size = random.choice(batch_sizes)
-        length = random.choice(small_lengths)
+    attempts = 0
+    max_attempts = num_cases * 10  # Prevent infinite loop
+    
+    while len(test_cases) < num_cases and attempts < max_attempts:
+        attempts += 1
         
-        # Check if total tokens fit within memory constraints
-        total_tokens = batch_size * length
-        if total_tokens <= max_model_len * 0.8:  # 80% safety margin
-            case = [length] * batch_size
-            small_cases.append(case)
-    
-    # If we don't have enough cases, generate more systematically
-    while len(small_cases) < 500:
-        for batch_size in batch_sizes:
-            for length in random.sample(small_lengths, min(50, len(small_lengths))):
-                total_tokens = batch_size * length
-                if total_tokens <= max_model_len * 0.8:
-                    case = [length] * batch_size
-                    if case not in small_cases:
-                        small_cases.append(case)
-                        if len(small_cases) >= 500:
-                            break
-            if len(small_cases) >= 500:
-                break
-    
-    # Take first 500 and shuffle
-    small_cases = small_cases[:500]
-    random.shuffle(small_cases)
-    test_cases.extend(small_cases)
-    
-    # Part 2: 500 combinations with consistent lengths > 8K and < 12K
-    print("Generating 500 combinations with consistent lengths > 8K and < 12K...")
-    
-    # Define length ranges for > 8K and < 12K cases
-    large_lengths = list(range(8208, 12288, 16))  # From 8208 to 12287 with step 16
-    large_batch_sizes = [1, 2, 3, 4, 5, 6, 7, 8]  # Smaller batch sizes due to larger tokens
-    
-    large_cases = []
-    for _ in range(500):
-        # Randomly select batch size and length
-        batch_size = random.choice(large_batch_sizes)
-        length = random.choice(large_lengths)
+        # Randomly select batch size
+        batch_size = random.choice(possible_batch_sizes)
         
-        # Check if total tokens fit within memory constraints
-        total_tokens = batch_size * length
-        if total_tokens <= max_model_len * 0.8:  # 80% safety margin
-            case = [length] * batch_size
-            large_cases.append(case)
+        # Randomly select request length (< 8K)
+        req_length = random.randint(min_req_length, max_req_length)
+        
+        # Create batch with consistent lengths
+        batch = [req_length] * batch_size
+        total_tokens = sum(batch)
+        
+        # Check constraints
+        if total_tokens <= max_model_len * 0.9:  # Use 90% of max_model_len as safety margin
+            # Avoid duplicates
+            batch_tuple = tuple(batch)
+            if batch_tuple not in [tuple(case) for case in test_cases]:
+                test_cases.append(batch)
+                
+                if len(test_cases) % 20 == 0:  # Progress indicator
+                    print(f"Generated {len(test_cases)}/{num_cases} cases...")
     
-    # If we don't have enough cases, generate more systematically
-    while len(large_cases) < 500:
-        for batch_size in large_batch_sizes:
-            for length in random.sample(large_lengths, min(100, len(large_lengths))):
-                total_tokens = batch_size * length
-                if total_tokens <= max_model_len * 0.8:
-                    case = [length] * batch_size
-                    if case not in large_cases:
-                        large_cases.append(case)
-                        if len(large_cases) >= 500:
-                            break
-            if len(large_cases) >= 500:
-                break
+    if len(test_cases) < num_cases:
+        print(f"Warning: Only generated {len(test_cases)} cases after {attempts} attempts")
     
-    # Take first 500 and shuffle
-    large_cases = large_cases[:500]
-    random.shuffle(large_cases)
-    test_cases.extend(large_cases)
+    # Final shuffle
+    random.shuffle(test_cases)
     
-    # Remove duplicates while preserving order
-    seen = set()
-    unique_test_cases = []
+    # Print statistics
+    batch_size_counts = {}
+    length_ranges = {"< 1K": 0, "1K-2K": 0, "2K-4K": 0, "4K-8K": 0}
+    
     for case in test_cases:
-        case_tuple = tuple(case)
-        if case_tuple not in seen:
-            seen.add(case_tuple)
-            unique_test_cases.append(case)
+        batch_size = len(case)
+        req_length = case[0]  # All lengths are the same in each batch
+        
+        # Count batch sizes
+        batch_size_counts[batch_size] = batch_size_counts.get(batch_size, 0) + 1
+        
+        # Count length ranges
+        if req_length < 1024:
+            length_ranges["< 1K"] += 1
+        elif req_length < 2048:
+            length_ranges["1K-2K"] += 1
+        elif req_length < 4096:
+            length_ranges["2K-4K"] += 1
+        else:
+            length_ranges["4K-8K"] += 1
     
-    print(f"Generated {len(unique_test_cases)} unique test cases:")
-    print(f"  - Small length cases (< 4K): {len([c for c in unique_test_cases if max(c) < 4096])}")
-    print(f"  - Large length cases (> 8K, < 12K): {len([c for c in unique_test_cases if max(c) > 8192 and max(c) < 12288])}")
+    print(f"\nGenerated {len(test_cases)} unique test cases:")
+    print("Batch size distribution:")
+    for batch_size in sorted(batch_size_counts.keys()):
+        print(f"  Batch size {batch_size}: {batch_size_counts[batch_size]} cases")
     
-    return unique_test_cases
+    print("Request length distribution:")
+    for range_name, count in length_ranges.items():
+        print(f"  {range_name}: {count} cases")
+    
+    return test_cases
 
 
 def calculate_equivalent_length(prefill_lengths: List[int]) -> int:
