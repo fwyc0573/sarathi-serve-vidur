@@ -1,6 +1,6 @@
 #!/usr/bin/bash
-export CUDA_VISIBLE_DEVICES=4,5,6,7
-
+export CUDA_VISIBLE_DEVICES=7
+export PYTHONPATH="/research/d1/gds/ytyang/yichengfeng/vidur/sarathi-serve-vidur/vidur:$PYTHONPATH"
 
 OUTPUT_DIR="./results"
 mkdir -p $OUTPUT_DIR

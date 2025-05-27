@@ -55,7 +55,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Prefill Estimation Accuracy Test V2")
     parser.add_argument("--model", type=str, default="meta-llama/Llama-2-7b-hf")
     parser.add_argument("--num_tensor_parallel", type=int, default=1)
-    parser.add_argument("--max_model_len", type=int, default=12288)
+    parser.add_argument("--max_model_len", type=int, default=4096)
     parser.add_argument("--block_size", type=int, default=16)
     parser.add_argument("--attention_backend", default=AttentionBackend.FLASHINFER, choices=[e.value for e in AttentionBackend])
     parser.add_argument("--output_dir", type=str, default="./results")
@@ -68,100 +68,210 @@ def parse_args():
 
 
 def generate_comprehensive_test_cases(max_model_len: int, num_cases: int = 1000, seed: int = 42) -> List[List[int]]:
-    """Generate comprehensive test cases for mixed-length batches with specific requirements."""
+    """Generate comprehensive test cases for mixed-length batches."""
     random.seed(seed)
     np.random.seed(seed)
     
     test_cases = []
     
-    # Part 1: 500 combinations with consistent lengths < 4K
-    print("Generating 500 combinations with consistent lengths < 4K...")
+    # 1. Basic single prefill cases for baseline
+    basic_lengths = [32, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048, 3072]
+    for length in basic_lengths:
+        if length <= max_model_len:
+            test_cases.append([length])
     
-    # Define length ranges for < 4K cases
-    small_lengths = list(range(32, 4096, 16))  # From 32 to 4095 with step 16
-    batch_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 20, 24, 32]
+    # 2. Equal length batches (batch sizes 2-8)
+    equal_lengths = [32, 64, 96, 128, 192, 256, 384, 512, 640, 768, 896, 1024, 1280, 1536, 1792, 2048]
+    for batch_size in [2, 3, 4, 5, 6, 7, 8]:
+        for length in equal_lengths:
+            if length * batch_size <= max_model_len * 0.8:
+                test_cases.append([length] * batch_size)
     
-    small_cases = []
-    for _ in range(500):
-        # Randomly select batch size and length
-        batch_size = random.choice(batch_sizes)
-        length = random.choice(small_lengths)
+    # 3. Arithmetic progression sequences
+    for batch_size in [3, 4, 5, 6, 7]:
+        for start in [32, 64, 96, 128, 192, 256, 384]:
+            for step in [32, 64, 96, 128, 192, 256]:
+                sequence = [start + i * step for i in range(batch_size)]
+                if max(sequence) <= max_model_len and sum(sequence) <= max_model_len * 0.8:
+                    test_cases.append(sequence)
+    
+    # 4. Geometric progression sequences
+    for batch_size in [3, 4, 5, 6]:
+        for start in [16, 32, 48, 64, 96, 128, 192]:
+            for ratio in [1.2, 1.5, 1.8, 2.0, 2.2, 2.5, 3.0]:
+                sequence = [int(start * (ratio ** i)) for i in range(batch_size)]
+                if max(sequence) <= max_model_len and sum(sequence) <= max_model_len * 0.8:
+                    test_cases.append(sequence)
+    
+    # 5. Extreme combinations (very short + very long)
+    short_lengths = [16, 32, 48, 64, 80, 96, 112, 128]
+    long_lengths = [1024, 1280, 1536, 1792, 2048, 2304, 2560, 2816, 3072]
+    for short in short_lengths:
+        for long in long_lengths:
+            if long <= max_model_len and short + long <= max_model_len * 0.8:
+                # One short + one long
+                test_cases.append([short, long])
+                # Multiple short + one long
+                if 2 * short + long <= max_model_len * 0.8:
+                    test_cases.append([short, short, long])
+                if 3 * short + long <= max_model_len * 0.8:
+                    test_cases.append([short, short, short, long])
+                if 4 * short + long <= max_model_len * 0.8:
+                    test_cases.append([short, short, short, short, long])
+                if 5 * short + long <= max_model_len * 0.8:
+                    test_cases.append([short, short, short, short, short, long])
+    
+    # 6. Random combinations with different patterns
+    for _ in range(200):
+        batch_size = random.randint(2, 8)
         
-        # Check if total tokens fit within memory constraints
-        total_tokens = batch_size * length
-        if total_tokens <= max_model_len * 0.8:  # 80% safety margin
-            case = [length] * batch_size
-            small_cases.append(case)
+        # Random uniform distribution
+        max_length = min(max_model_len, 2048)
+        lengths = [random.randint(32, max_length) for _ in range(batch_size)]
+        if sum(lengths) <= max_model_len * 0.8:
+            test_cases.append(sorted(lengths))
     
-    # If we don't have enough cases, generate more systematically
-    while len(small_cases) < 500:
-        for batch_size in batch_sizes:
-            for length in random.sample(small_lengths, min(50, len(small_lengths))):
-                total_tokens = batch_size * length
-                if total_tokens <= max_model_len * 0.8:
-                    case = [length] * batch_size
-                    if case not in small_cases:
-                        small_cases.append(case)
-                        if len(small_cases) >= 500:
-                            break
-            if len(small_cases) >= 500:
+    # 7. Fibonacci-like sequences
+    for start1, start2 in [(16, 32), (24, 48), (32, 64), (48, 96), (64, 128), (96, 160), (128, 192)]:
+        fib_seq = [start1, start2]
+        while len(fib_seq) < 8:
+            next_val = fib_seq[-1] + fib_seq[-2]
+            if next_val > max_model_len:
                 break
-    
-    # Take first 500 and shuffle
-    small_cases = small_cases[:500]
-    random.shuffle(small_cases)
-    test_cases.extend(small_cases)
-    
-    # Part 2: 500 combinations with consistent lengths > 8K and < 12K
-    print("Generating 500 combinations with consistent lengths > 8K and < 12K...")
-    
-    # Define length ranges for > 8K and < 12K cases
-    large_lengths = list(range(8208, 12288, 16))  # From 8208 to 12287 with step 16
-    large_batch_sizes = [1, 2, 3, 4, 5, 6, 7, 8]  # Smaller batch sizes due to larger tokens
-    
-    large_cases = []
-    for _ in range(500):
-        # Randomly select batch size and length
-        batch_size = random.choice(large_batch_sizes)
-        length = random.choice(large_lengths)
+            fib_seq.append(next_val)
         
-        # Check if total tokens fit within memory constraints
-        total_tokens = batch_size * length
-        if total_tokens <= max_model_len * 0.8:  # 80% safety margin
-            case = [length] * batch_size
-            large_cases.append(case)
+        # Generate subsequences of different lengths
+        for length in range(2, min(8, len(fib_seq) + 1)):
+            subseq = fib_seq[:length]
+            if sum(subseq) <= max_model_len * 0.8:
+                test_cases.append(subseq)
     
-    # If we don't have enough cases, generate more systematically
-    while len(large_cases) < 500:
-        for batch_size in large_batch_sizes:
-            for length in random.sample(large_lengths, min(100, len(large_lengths))):
-                total_tokens = batch_size * length
-                if total_tokens <= max_model_len * 0.8:
-                    case = [length] * batch_size
-                    if case not in large_cases:
-                        large_cases.append(case)
-                        if len(large_cases) >= 500:
-                            break
-            if len(large_cases) >= 500:
-                break
+    # 8. Power of 2 sequences
+    powers = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
+    for batch_size in [2, 3, 4, 5, 6, 7]:
+        for start_idx in range(len(powers) - batch_size + 1):
+            sequence = powers[start_idx:start_idx + batch_size]
+            if sum(sequence) <= max_model_len * 0.8:
+                test_cases.append(sequence)
     
-    # Take first 500 and shuffle
-    large_cases = large_cases[:500]
-    random.shuffle(large_cases)
-    test_cases.extend(large_cases)
+    # 9. Mixed distribution patterns
+    common_lengths = [64, 128, 192, 256, 384, 512, 768, 1024, 1536]
+    for _ in range(150):
+        batch_size = random.randint(2, 7)
+        # Create various distribution patterns
+        pattern = random.choice(['bimodal_small_large', 'bimodal_large_small', 'uniform', 'ascending', 'descending'])
+        
+        if pattern == 'bimodal_small_large':
+            # Mostly small with one large
+            lengths = [random.choice(common_lengths[:3]) for _ in range(batch_size - 1)]
+            lengths.append(random.choice(common_lengths[6:]))
+        elif pattern == 'bimodal_large_small':
+            # Mostly large with one small
+            lengths = [random.choice(common_lengths[6:]) for _ in range(batch_size - 1)]
+            lengths.append(random.choice(common_lengths[:3]))
+        elif pattern == 'uniform':
+            # Uniform distribution
+            lengths = [random.choice(common_lengths) for _ in range(batch_size)]
+        elif pattern == 'ascending':
+            # Ascending pattern
+            start_idx = random.randint(0, len(common_lengths) - batch_size)
+            lengths = common_lengths[start_idx:start_idx + batch_size]
+        else:  # descending
+            # Descending pattern
+            start_idx = random.randint(batch_size - 1, len(common_lengths) - 1)
+            lengths = common_lengths[start_idx - batch_size + 1:start_idx + 1][::-1]
+        
+        if sum(lengths) <= max_model_len * 0.8:
+            test_cases.append(sorted(lengths))
+    
+    # 10. Edge cases
+    # Very small lengths with varying batch sizes
+    for batch_size in [2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20]:
+        if batch_size <= 20:
+            small_lengths = [32] * batch_size
+            if sum(small_lengths) <= max_model_len * 0.8:
+                test_cases.append(small_lengths)
+    
+    # 11. 新增：阶梯状模式
+    for num_steps in [3, 4, 5, 6]:
+        for step_size in [64, 128, 192, 256]:
+            for repetitions in [1, 2, 3]:
+                lengths = []
+                for i in range(num_steps):
+                    base_length = 64 + i * step_size
+                    lengths.extend([base_length] * repetitions)
+                if max(lengths) <= max_model_len and sum(lengths) <= max_model_len * 0.8:
+                    test_cases.append(lengths)
+    
+    # 12. 新增：质数长度组合
+    primes = [31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199]
+    scaled_primes = [p * 8 for p in primes if p * 8 <= max_model_len]
+    for batch_size in [2, 3, 4, 5]:
+        for _ in range(20):
+            if len(scaled_primes) >= batch_size:
+                lengths = random.sample(scaled_primes, batch_size)
+                if sum(lengths) <= max_model_len * 0.8:
+                    test_cases.append(sorted(lengths))
+    
+    # 13. 新增：对数间隔模式
+    for batch_size in [3, 4, 5, 6]:
+        for base in [1.5, 2.0, 2.5, 3.0]:
+            lengths = [int(64 * (base ** i)) for i in range(batch_size)]
+            if max(lengths) <= max_model_len and sum(lengths) <= max_model_len * 0.8:
+                test_cases.append(lengths)
     
     # Remove duplicates while preserving order
     seen = set()
     unique_test_cases = []
     for case in test_cases:
-        case_tuple = tuple(case)
+        case_tuple = tuple(sorted(case))
         if case_tuple not in seen:
             seen.add(case_tuple)
             unique_test_cases.append(case)
     
-    print(f"Generated {len(unique_test_cases)} unique test cases:")
-    print(f"  - Small length cases (< 4K): {len([c for c in unique_test_cases if max(c) < 4096])}")
-    print(f"  - Large length cases (> 8K, < 12K): {len([c for c in unique_test_cases if max(c) > 8192 and max(c) < 12288])}")
+    # Shuffle to randomize order
+    random.shuffle(unique_test_cases)
+    
+    # Truncate or extend to desired number
+    if len(unique_test_cases) > num_cases:
+        unique_test_cases = unique_test_cases[:num_cases]
+    elif len(unique_test_cases) < num_cases:
+        # If we need more cases, generate additional random ones
+        while len(unique_test_cases) < num_cases:
+            batch_size = random.randint(2, 8)
+            max_length = min(max_model_len, 2048)
+            
+            # 使用不同的生成策略
+            strategy = random.choice(['uniform', 'exponential', 'normal', 'mixed'])
+            
+            if strategy == 'uniform':
+                lengths = sorted([random.randint(32, max_length) for _ in range(batch_size)])
+            elif strategy == 'exponential':
+                # 指数分布
+                base_length = random.randint(32, 128)
+                lengths = [int(base_length * (1.5 ** i)) for i in range(batch_size)]
+                lengths = [min(l, max_length) for l in lengths]
+            elif strategy == 'normal':
+                # 正态分布（截断）
+                mean_length = random.randint(200, 800)
+                std_length = mean_length * 0.3
+                lengths = []
+                for _ in range(batch_size):
+                    length = int(max(32, min(max_length, np.random.normal(mean_length, std_length))))
+                    lengths.append(length)
+                lengths = sorted(lengths)
+            else:  # mixed
+                # 混合策略
+                small_part = random.randint(1, batch_size - 1)
+                lengths = [random.randint(32, 200) for _ in range(small_part)]
+                lengths.extend([random.randint(800, max_length) for _ in range(batch_size - small_part)])
+                lengths = sorted(lengths)
+            
+            if sum(lengths) <= max_model_len * 0.8:
+                case_tuple = tuple(lengths)
+                if case_tuple not in seen:
+                    seen.add(case_tuple)
+                    unique_test_cases.append(lengths)
     
     return unique_test_cases
 

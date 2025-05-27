@@ -1,0 +1,7 @@
+nohup: ignoring input
+Running experiment for model: meta-llama/Llama-2-7b-hf
+Traceback (most recent call last):
+  File "/research/d1/gds/ytyang/yichengfeng/vidur/sarathi-serve-vidur/vidur/vidur/profiling/prefill_calculation/prefill_estimation_test.py", line 14, in <module>
+    import sarathi.metrics.cuda_timer
+ModuleNotFoundError: No module named 'sarathi'
+All experiments completed.

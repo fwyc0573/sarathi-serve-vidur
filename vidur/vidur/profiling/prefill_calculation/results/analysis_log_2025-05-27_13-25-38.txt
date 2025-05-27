@@ -1,0 +1,60 @@
+================================================================================
+COMPREHENSIVE VIDUR PREFILL ESTIMATION ACCURACY ANALYSIS
+================================================================================
+Model: meta-llama/Llama-2-7b-hf
+Total test cases: 1000
+Mixed batch cases: 683
+Single prefill cases: 317
+Attention backend: AttentionBackend.FLASHINFER
+Max model length: 16384
+Block size: 16
+Warmup strategy: 5 warmup + 10 measurement runs
+Test timestamp: 2025-05-27_13-25-38
+--------------------------------------------------------------------------------
+ERROR STATISTICS (Mixed Batch Only):
+  Mean Error: 56.46%
+  Median Error: 54.02%
+  Std Deviation: 30.47%
+  Min Error: -0.08%
+  Max Error: 139.13%
+  Mean Absolute Error: 56.46%
+  95th Percentile Abs Error: 109.67%
+
+ACCURACY THRESHOLDS:
+  Within 5%: 8/683 (1.2%)
+  Within 10%: 26/683 (3.8%)
+  Within 15%: 46/683 (6.7%)
+  Within 20%: 89/683 (13.0%)
+  Within 25%: 132/683 (19.3%)
+  Within 30%: 173/683 (25.3%)
+  Within 50%: 309/683 (45.2%)
+
+BATCH SIZE ANALYSIS:
+  Batch size 2: 175 cases, mean error: 22.6%, median: 21.5%
+  Batch size 3: 119 cases, mean error: 41.3%, median: 41.0%
+  Batch size 4: 66 cases, mean error: 55.7%, median: 51.6%
+  Batch size 5: 69 cases, mean error: 63.5%, median: 61.3%
+  Batch size 6: 46 cases, mean error: 72.1%, median: 72.9%
+  Batch size 7: 43 cases, mean error: 72.8%, median: 68.2%
+  Batch size 8: 46 cases, mean error: 81.0%, median: 80.6%
+  Batch size 10: 33 cases, mean error: 91.9%, median: 90.8%
+  Batch size 12: 35 cases, mean error: 91.4%, median: 87.1%
+  Batch size 16: 18 cases, mean error: 102.7%, median: 100.0%
+  Batch size 20: 14 cases, mean error: 104.6%, median: 100.3%
+  Batch size 24: 7 cases, mean error: 97.0%, median: 94.8%
+  Batch size 32: 12 cases, mean error: 103.5%, median: 111.5%
+
+OUTPUT FILES:
+  CSV: ./results/comprehensive_estimation_results_2025-05-27_13-25-38.csv
+  Plot: ./results/comprehensive_analysis_2025-05-27_13-25-38.png
+
+BEST CASE (lowest error):
+  Lengths: [6762, 6762]
+  Error: -0.1%
+  Actual: 11.0ms, Estimated: 11.0ms
+
+WORST CASE (highest error):
+  Lengths: [298, 298, 298, 298, 298, 298, 298, 298, 298, 298, 298, 298, 298, 298, 298, 298, 298, 298, 298, 298]
+  Error: 139.1%
+  Actual: 0.5ms, Estimated: 1.3ms
+================================================================================
