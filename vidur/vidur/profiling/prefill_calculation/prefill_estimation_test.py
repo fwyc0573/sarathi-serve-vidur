@@ -64,6 +64,7 @@ def parse_args():
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
     parser.add_argument("--num_test_cases", type=int, default=1000, help="Number of test cases to generate")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducible test cases")
+    parser.add_argument("--use_improved_method", action="store_true", help="Use improved method for equivalent length calculation")
     return parser.parse_args()
 
 
@@ -100,7 +101,7 @@ def generate_comprehensive_test_cases(max_model_len: int, num_cases: int = 100, 
         total_tokens = sum(batch)
         
         # Check constraints
-        if total_tokens <= max_model_len * 0.9:  # Use 90% of max_model_len as safety margin
+        if total_tokens <= max_model_len * batch_size * 0.9:  # Use 90% of max_model_len as safety margin
             # Avoid duplicates
             batch_tuple = tuple(batch)
             if batch_tuple not in [tuple(case) for case in test_cases]:
@@ -117,7 +118,7 @@ def generate_comprehensive_test_cases(max_model_len: int, num_cases: int = 100, 
     
     # Print statistics
     batch_size_counts = {}
-    length_ranges = {"< 1K": 0, "1K-2K": 0, "2K-4K": 0, "4K-8K": 0}
+    length_ranges = {"< 1K": 0, "1K-2K": 0, "2K-4K": 0, "4K-8K": 0, "> 8K": 0}
     
     for case in test_cases:
         batch_size = len(case)
@@ -133,8 +134,10 @@ def generate_comprehensive_test_cases(max_model_len: int, num_cases: int = 100, 
             length_ranges["1K-2K"] += 1
         elif req_length < 4096:
             length_ranges["2K-4K"] += 1
-        else:
+        elif req_length < 8192:
             length_ranges["4K-8K"] += 1
+        else:
+            length_ranges["> 8K"] += 1
     
     print(f"\nGenerated {len(test_cases)} unique test cases:")
     print("Batch size distribution:")
@@ -148,8 +151,31 @@ def generate_comprehensive_test_cases(max_model_len: int, num_cases: int = 100, 
     return test_cases
 
 
-def calculate_equivalent_length(prefill_lengths: List[int]) -> int:
-    """Calculate equivalent length using vidur's formula: sqrt(sum(p_i^2))"""
+# def calculate_equivalent_length(prefill_lengths: List[int]) -> int:
+#     """Calculate equivalent length using vidur's formula: sqrt(sum(p_i^2))"""
+#     sum_of_squares = sum(length**2 for length in prefill_lengths)
+#     return int(np.sqrt(sum_of_squares))
+
+def calculate_equivalent_length(prefill_lengths: List[int], use_improved_method: bool = False) -> int:
+    """Calculate equivalent length using vidur's formula.
+    
+    Args:
+        prefill_lengths: List of prefill lengths
+        use_improved_method: If True, use improved method that checks coefficient of variation
+                             If False, use original method (sqrt of sum of squares)
+    
+    Returns:
+        Equivalent length as an integer
+    """
+    if use_improved_method and len(prefill_lengths) > 1:
+        # 计算变异系数 (coefficient of variation)
+        mean_length = np.mean(prefill_lengths)
+        std_length = np.std(prefill_lengths)
+        cv = std_length / mean_length  # 变异系数
+        
+        if cv < 0.1:  # 长度十分相近
+            return int(max(prefill_lengths))  # 使用最长长度
+    
     sum_of_squares = sum(length**2 for length in prefill_lengths)
     return int(np.sqrt(sum_of_squares))
 
@@ -280,7 +306,7 @@ def main():
                 print(f"Skipping case {i+1}: lengths exceed max_model_len")
             continue
         
-        equivalent_length = calculate_equivalent_length(prefill_lengths)
+        equivalent_length = calculate_equivalent_length(prefill_lengths, args.use_improved_method)
         if equivalent_length > args.max_model_len:
             if args.debug:
                 print(f"Skipping case {i+1}: equivalent length {equivalent_length} exceeds max_model_len")
